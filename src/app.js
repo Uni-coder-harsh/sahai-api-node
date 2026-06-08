@@ -12,6 +12,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Custom telemetry and HTTP request debugger middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[HTTP] ${req.method} ${req.originalUrl} - Status: ${res.statusCode} - Duration: ${duration}ms`);
+    if (req.method === 'POST') {
+      console.log(`[HTTP] [Payload]`, JSON.stringify(req.body));
+    }
+  });
+  next();
+});
+
 // Main Service Routes
 app.use('/api/users', userRoutes);
 app.use('/api/telemetry', telemetryRoutes);
