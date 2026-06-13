@@ -7,6 +7,7 @@ const pgPool = new Pool({
   user: config.PG.user,
   password: config.PG.password,
   database: config.PG.database,
+  ssl: config.PG.ssl,
   max: 25, // Optimized pool size
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000

@@ -1,6 +1,7 @@
 const app = require('./app');
 const config = require('./config');
 const { connectMongo } = require('./database/mongo');
+const logger = require('./utils/logger');
 
 async function bootstrap() {
   try {
@@ -9,10 +10,10 @@ async function bootstrap() {
 
     // Start Express API Listener
     app.listen(config.PORT, () => {
-      console.log(`[Server] Node.js API Service running on port ${config.PORT}`);
+      logger.info(`Node.js API Service running on port ${config.PORT}`);
     });
   } catch (error) {
-    console.error('[Server] Bootstrapping failed:', error);
+    logger.error('Bootstrapping failed:', error);
     process.exit(1);
   }
 }
