@@ -1,6 +1,10 @@
 const Redis = require('ioredis');
 const config = require('../config');
 
+if (!config.REDIS_URL) {
+  console.warn('[Redis] Warning: REDIS_URL environment variable is missing. Client will attempt to connect to localhost:6379.');
+}
+
 const redis = new Redis(config.REDIS_URL, {
   maxRetriesPerRequest: null,
   reconnectOnError: (err) => {

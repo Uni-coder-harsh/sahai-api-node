@@ -1,6 +1,11 @@
 const { MongoClient } = require('mongodb');
 const config = require('../config');
 
+if (!config.MONGO_URI) {
+  console.error('[Mongo] Critical Error: MONGO_URI environment variable is missing!');
+  process.exit(1);
+}
+
 const mongoClient = new MongoClient(config.MONGO_URI);
 let mongoDb = null;
 
