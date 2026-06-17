@@ -50,7 +50,16 @@ async function getInitialQuestions(req, res) {
  * and enqueues telemetry events to the Redis queue for the math worker to process.
  */
 async function submitAnswer(req, res) {
-  const { user_id, question_id, option_id, time_spent_seconds } = req.body;
+  const { 
+    user_id, 
+    question_id, 
+    option_id, 
+    time_spent_seconds,
+    run_count,
+    backspace_count,
+    paste_char_count,
+    syntax_error_count
+  } = req.body;
 
   if (!user_id || !question_id || !option_id) {
     return res.status(400).json({ error: 'user_id, question_id, and option_id are required.' });
@@ -99,7 +108,7 @@ async function submitAnswer(req, res) {
     await pgPool.query(insertResponseQuery, [user_id, question_id, option_id, isCorrect, time_spent_seconds || 30]);
 
     // 4. Send telemetry events for each primary concept linked to the question
-    const telemetryEvents = [];
+    const telemetryEventsRes = [];
     for (const link of conceptLinks) {
       const payload = {
         user_id,
@@ -110,6 +119,10 @@ async function submitAnswer(req, res) {
         code_snippet: `Chosen Option ID: ${option_id}`,
         behavioral_flags: isCorrect ? [] : ['MCQ_INCORRECT'],
         time_spent_seconds: time_spent_seconds || 30,
+        run_count: parseInt(run_count || 0),
+        backspace_count: parseInt(backspace_count || 0),
+        paste_char_count: parseInt(paste_char_count || 0),
+        syntax_error_count: parseInt(syntax_error_count || 0),
         // Send along primary connection weight
         influence_weight: parseFloat(link.weight),
         // Send along misconceptions for potential updates
@@ -124,9 +137,12 @@ async function submitAnswer(req, res) {
       const mongoDb = getMongoDb();
       await mongoDb.collection('telemetry_raw').insertOne(payload);
 
-      // Publish to Redis telemetry queue
-      await publishTelemetry(payload);
-      telemetryEvents.push(payload);
+      // Publish telemetry directly to Python math server via HTTP
+      const mathUpdateResult = await publishTelemetry(payload);
+      telemetryEventsRes.push({
+        node_id: link.node_id,
+        ...mathUpdateResult
+      });
     }
 
     // If no concepts are linked, send a default telemetry event
@@ -140,11 +156,19 @@ async function submitAnswer(req, res) {
         code_snippet: `Chosen Option ID: ${option_id}`,
         behavioral_flags: isCorrect ? [] : ['MCQ_INCORRECT'],
         time_spent_seconds: time_spent_seconds || 30,
+        run_count: parseInt(run_count || 0),
+        backspace_count: parseInt(backspace_count || 0),
+        paste_char_count: parseInt(paste_char_count || 0),
+        syntax_error_count: parseInt(syntax_error_count || 0),
         timestamp: new Date()
       };
       const mongoDb = getMongoDb();
       await mongoDb.collection('telemetry_raw').insertOne(payload);
-      await publishTelemetry(payload);
+      const mathUpdateResult = await publishTelemetry(payload);
+      telemetryEventsRes.push({
+        node_id: 'PY_SYNTAX_01',
+        ...mathUpdateResult
+      });
     }
 
     res.json({
@@ -152,7 +176,8 @@ async function submitAnswer(req, res) {
       correct_option_id: question.correct_option_id,
       message: isCorrect ? 'Correct answer!' : 'Incorrect answer.',
       concepts_evaluated: conceptLinks.map(c => c.node_id),
-      misconceptions_detected: misconceptions.map(m => m.node_id)
+      misconceptions_detected: misconceptions.map(m => m.node_id),
+      telemetry_updates: telemetryEventsRes
     });
   } catch (error) {
     console.error('[QuestionController] Failed to submit answer:', error);
@@ -287,9 +312,82 @@ async function getAttemptHistory(req, res) {
   }
 }
 
+/**
+ * Fetches all questions in the bank, enriched with student-specific attempt statuses.
+ */
+async function getAllQuestions(req, res) {
+  const { user_id } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id query parameter is required.' });
+  }
+
+  try {
+    const query = `
+      SELECT q.id, q.question_text, q.difficulty_level, q.expected_time, q.is_initial_test,
+             COALESCE(
+               (
+                 SELECT CASE 
+                   WHEN bool_or(uqr.is_correct) THEN 'COMPLETED'
+                   ELSE 'ATTEMPTED'
+                 END
+                 FROM user_question_responses uqr
+                 WHERE uqr.question_id = q.id AND uqr.user_id = $1
+               ),
+               'UNATTEMPTED'
+             ) as status,
+             (
+               SELECT string_agg(qcl.node_id, ', ')
+               FROM question_concept_links qcl
+               WHERE qcl.question_id = q.id
+             ) as concept_nodes
+      FROM questions q
+      ORDER BY q.is_initial_test DESC, q.difficulty_level ASC;
+    `;
+    const result = await pgPool.query(query, [user_id]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error('[QuestionController] Failed to fetch all questions:', error);
+    res.status(500).json({ error: 'Failed to fetch all questions.', details: error.message });
+  }
+}
+
+/**
+ * Fetches options and metadata for a single question.
+ */
+async function getQuestionDetails(req, res) {
+  const { id } = req.params;
+
+  try {
+    const questionRes = await pgPool.query(
+      'SELECT id, question_text, difficulty_level, expected_time, is_initial_test FROM questions WHERE id = $1',
+      [id]
+    );
+
+    if (questionRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Question not found.' });
+    }
+
+    const question = questionRes.rows[0];
+
+    const optionsRes = await pgPool.query(
+      'SELECT id, question_id, option_letter, option_text FROM options WHERE question_id = $1 ORDER BY option_letter ASC',
+      [id]
+    );
+    question.options = optionsRes.rows;
+
+    res.json(question);
+  } catch (error) {
+    console.error('[QuestionController] Failed to fetch question details:', error);
+    res.status(500).json({ error: 'Failed to fetch question details.', details: error.message });
+  }
+}
+
 module.exports = {
   getInitialQuestions,
   submitAnswer,
   getPracticeQuestions,
-  getAttemptHistory
+  getAttemptHistory,
+  getAllQuestions,
+  getQuestionDetails
 };

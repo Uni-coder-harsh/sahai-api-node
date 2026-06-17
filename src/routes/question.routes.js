@@ -12,6 +12,12 @@ router.get('/practice', authRequired, questionController.getPracticeQuestions);
 // Retrieve attempt history logs
 router.get('/history', authRequired, questionController.getAttemptHistory);
 
+// Retrieve all questions (LeetCode-style list)
+router.get('/all', authRequired, questionController.getAllQuestions);
+
+// Retrieve details for a single question
+router.get('/:id', authRequired, questionController.getQuestionDetails);
+
 // Submit answers and trigger Bayesian updates
 router.post('/submit', authRequired, questionController.submitAnswer);
 

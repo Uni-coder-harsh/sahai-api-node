@@ -9,10 +9,15 @@ router.post('/login', userController.loginUser);
 
 // Onboarding & personalization
 router.post('/', userController.onboardUser);
+
+// Institutions list (placed before parameter endpoints to avoid collision)
+router.get('/institutions/list', userController.getInstitutionsList);
+
 router.post('/:user_id/personalize', authRequired, userController.personalizeEngine);
 
 // Retrieve cached cognitive distributions
 router.get('/:user_id/cognitive-state', authRequired, userController.getCognitiveState);
 router.get('/:user_id', authRequired, userController.getUserProfile);
+router.put('/:user_id', authRequired, userController.updateUserProfile);
 
 module.exports = router;

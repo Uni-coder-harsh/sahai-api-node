@@ -2,7 +2,7 @@ const config = require('../config');
 
 /**
  * Sends telemetry events directly to the Python mathematical engine via HTTP.
- * This replaces the Redis queueing mechanism, saving connection overhead and Upstash costs.
+ * Captures and returns the mathematical / behavioral metrics computed by the Python engine.
  */
 async function publishTelemetry(payload) {
   try {
@@ -20,13 +20,15 @@ async function publishTelemetry(payload) {
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`[Telemetry] Python engine returned error status ${response.status}: ${errorText}`);
+      return { success: false, error: errorText };
     } else {
-      console.log('[Telemetry] Python engine processed telemetry successfully.');
+      const result = await response.json();
+      console.log('[Telemetry] Python engine processed telemetry successfully.', result);
+      return result;
     }
-    return true;
   } catch (error) {
     console.error('[Telemetry] Failed to notify Python engine via HTTP request:', error);
-    return false;
+    return { success: false, error: error.message };
   }
 }
 
