@@ -15,8 +15,8 @@ app.use(cors());
 app.use(express.json());
 const logger = require('./utils/logger');
 
-// Serve static assets from Flutter web build
-app.use(express.static(path.join(__dirname, '../../../clients/flutter/build/web')));
+// Serve static assets from React dist
+app.use(express.static(path.join(__dirname, '../../../clients/react/dist')));
 
 // Custom telemetry and HTTP request debugger middleware
 app.use((req, res, next) => {
@@ -62,12 +62,12 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Catch-all route to serve the Flutter single-page app (index.html)
+// Catch-all route to serve the React single-page app (index.html)
 app.get('*', (req, res, next) => {
   if (req.url.startsWith('/api')) {
     return next();
   }
-  res.sendFile(path.join(__dirname, '../../../clients/flutter/build/web/index.html'));
+  res.sendFile(path.join(__dirname, '../../../clients/react/dist/index.html'));
 });
 
 module.exports = app;
