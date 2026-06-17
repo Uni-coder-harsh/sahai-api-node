@@ -133,7 +133,7 @@ async function submitAnswer(req, res) {
     if (conceptLinks.length === 0) {
       const payload = {
         user_id,
-        node_id: 'CS_PY_SYNTAX',
+        node_id: 'PY_SYNTAX_01',
         event_type: 'MCQ_SUBMISSION',
         success: isCorrect,
         attempts: 1,
@@ -175,7 +175,7 @@ async function getPracticeQuestions(req, res) {
     const cognitiveStateQuery = `
       SELECT node_id, expected_mastery
       FROM user_cognitive_states
-      WHERE user_id = $1 AND node_id LIKE 'CS_PY_%'
+      WHERE user_id = $1 AND node_id LIKE 'PY_%'
       ORDER BY expected_mastery ASC;
     `;
     const cognitiveStateRes = await pgPool.query(cognitiveStateQuery, [user_id]);
@@ -187,31 +187,38 @@ async function getPracticeQuestions(req, res) {
       targetNodes = cognitiveStates.slice(0, 3).map(cs => cs.node_id);
     }
 
-    // Default to CS_PY_SYNTAX if no states are initialized yet
+    // Default to PY_SYNTAX_01 if no states are initialized yet
     if (targetNodes.length === 0) {
-      targetNodes = ['CS_PY_SYNTAX'];
+      targetNodes = ['PY_SYNTAX_01'];
     }
 
-    // 2. Fetch practice questions linked to these target subtopics
+    // 2. Fetch practice questions linked to these target subtopics, excluding already solved questions
     const questionsQuery = `
       SELECT DISTINCT q.id, q.question_text, q.difficulty_level, q.expected_time
       FROM questions q
       JOIN question_concept_links qcl ON q.id = qcl.question_id
-      WHERE q.is_initial_test = FALSE AND qcl.node_id = ANY($1)
+      WHERE q.is_initial_test = FALSE 
+        AND qcl.node_id = ANY($1)
+        AND q.id NOT IN (
+          SELECT question_id FROM user_question_responses WHERE user_id = $2 AND is_correct = TRUE
+        )
       LIMIT 5;
     `;
-    const questionsRes = await pgPool.query(questionsQuery, [targetNodes]);
+    const questionsRes = await pgPool.query(questionsQuery, [targetNodes, user_id]);
     let questions = questionsRes.rows;
 
-    // Fallback if no questions are linked to the weakest nodes: just load general practice questions
+    // Fallback if no questions are linked to the weakest nodes: load general uncompleted practice questions
     if (questions.length === 0) {
       const fallbackQuery = `
         SELECT id, question_text, difficulty_level, expected_time
         FROM questions
         WHERE is_initial_test = FALSE
+          AND id NOT IN (
+            SELECT question_id FROM user_question_responses WHERE user_id = $1 AND is_correct = TRUE
+          )
         LIMIT 5;
       `;
-      const fallbackRes = await pgPool.query(fallbackQuery);
+      const fallbackRes = await pgPool.query(fallbackQuery, [user_id]);
       questions = fallbackRes.rows;
     }
 
@@ -244,8 +251,45 @@ async function getPracticeQuestions(req, res) {
   }
 }
 
+/**
+ * Fetches user question response history.
+ */
+async function getAttemptHistory(req, res) {
+  const { user_id } = req.query;
+
+  if (!user_id) {
+    return res.status(400).json({ error: 'user_id query parameter is required.' });
+  }
+
+  try {
+    const historyQuery = `
+      SELECT uqr.id, uqr.is_correct, uqr.time_spent_seconds, uqr.created_at,
+             q.question_text, q.difficulty_level,
+             opt.option_letter as chosen_option_letter, opt.option_text as chosen_option_text,
+             corr_opt.option_letter as correct_option_letter, corr_opt.option_text as correct_option_text,
+             (
+               SELECT string_agg(ocm.node_id, ', ')
+               FROM option_concept_misconceptions ocm
+               WHERE ocm.option_id = uqr.option_id
+             ) as misconceptions
+      FROM user_question_responses uqr
+      JOIN questions q ON uqr.question_id = q.id
+      JOIN options opt ON uqr.option_id = opt.id
+      LEFT JOIN options corr_opt ON q.correct_option_id = corr_opt.id
+      WHERE uqr.user_id = $1
+      ORDER BY uqr.created_at DESC;
+    `;
+    const historyRes = await pgPool.query(historyQuery, [user_id]);
+    res.json(historyRes.rows);
+  } catch (error) {
+    console.error('[QuestionController] Failed to fetch attempt history:', error);
+    res.status(500).json({ error: 'Failed to fetch attempt history.', details: error.message });
+  }
+}
+
 module.exports = {
   getInitialQuestions,
   submitAnswer,
-  getPracticeQuestions
+  getPracticeQuestions,
+  getAttemptHistory
 };
