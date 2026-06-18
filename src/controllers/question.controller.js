@@ -139,6 +139,9 @@ async function submitAnswer(req, res) {
 
       // Publish telemetry directly to Python math server via HTTP
       const mathUpdateResult = await publishTelemetry(payload);
+      if (!mathUpdateResult || !mathUpdateResult.success) {
+        throw new Error(mathUpdateResult?.error || 'Failed to update Bayesian cognitive parameters. Math Engine is offline.');
+      }
       telemetryEventsRes.push({
         node_id: link.node_id,
         ...mathUpdateResult
@@ -165,6 +168,9 @@ async function submitAnswer(req, res) {
       const mongoDb = getMongoDb();
       await mongoDb.collection('telemetry_raw').insertOne(payload);
       const mathUpdateResult = await publishTelemetry(payload);
+      if (!mathUpdateResult || !mathUpdateResult.success) {
+        throw new Error(mathUpdateResult?.error || 'Failed to update Bayesian cognitive parameters. Math Engine is offline.');
+      }
       telemetryEventsRes.push({
         node_id: 'PY_SYNTAX_01',
         ...mathUpdateResult
