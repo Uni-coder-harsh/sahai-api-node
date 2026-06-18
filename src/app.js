@@ -62,6 +62,52 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
+// Network and environment diagnostics endpoint
+app.get('/api/diagnose', async (req, res) => {
+  const dns = require('dns').promises;
+  const config = require('./config');
+  const hosts = [
+    'engine-python',
+    'sahai-engine-python',
+    'engine-python-production',
+    'sahai-engine-python-production',
+    'engine-python.railway.internal',
+    'sahai-engine-python.railway.internal',
+    'engine-python-production.railway.internal',
+    'sahai-engine-python-production.railway.internal'
+  ];
+  
+  const results = {};
+  for (const host of hosts) {
+    try {
+      const addresses = await dns.lookup(host);
+      results[host] = { status: 'RESOLVED', ip: addresses.address };
+    } catch (err) {
+      results[host] = { status: 'FAILED', error: err.message };
+    }
+  }
+  
+  const safeEnv = {};
+  for (const key in process.env) {
+    if (!key.toLowerCase().includes('password') && 
+        !key.toLowerCase().includes('secret') && 
+        !key.toLowerCase().includes('key') && 
+        !key.toLowerCase().includes('uri') && 
+        !key.toLowerCase().includes('url') &&
+        !key.toLowerCase().includes('token')) {
+      safeEnv[key] = process.env[key];
+    }
+  }
+  
+  res.json({
+    results,
+    env: safeEnv,
+    currentConfig: {
+      ENGINE_PYTHON_URL: config.ENGINE_PYTHON_URL
+    }
+  });
+});
+
 // Catch-all route to serve the React single-page app (index.html)
 app.get('*', (req, res, next) => {
   if (req.url.startsWith('/api')) {
