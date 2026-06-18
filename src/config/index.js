@@ -17,7 +17,7 @@ module.exports = {
   // Redis Event Ingestion Queue Configuration
   REDIS_URL: process.env.REDIS_URL,
   TELEMETRY_QUEUE: process.env.TELEMETRY_QUEUE || 'telemetry_queue',
-  ENGINE_PYTHON_URL: process.env.ENGINE_PYTHON_URL || (process.env.RAILWAY_ENVIRONMENT ? 'http://engine-python.railway.internal:5000' : 'http://localhost:5000'),
+  ENGINE_PYTHON_URL: process.env.ENGINE_PYTHON_URL || ((process.env.RAILWAY_ENVIRONMENT_NAME || process.env.RAILWAY_SERVICE_NAME || process.env.RAILWAY_ENVIRONMENT_ID) ? 'http://engine-python.railway.internal:5000' : 'http://localhost:5000'),
   
   // MongoDB Document Persistence Configuration
   MONGO_URI: process.env.MONGO_URI

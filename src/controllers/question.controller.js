@@ -331,16 +331,14 @@ async function getAllQuestions(req, res) {
   try {
     const query = `
       SELECT q.id, q.question_text, q.difficulty_level, q.expected_time, q.is_initial_test,
-             COALESCE(
-               (
-                 SELECT CASE 
-                   WHEN bool_or(uqr.is_correct) THEN 'COMPLETED'
-                   ELSE 'ATTEMPTED'
-                 END
-                 FROM user_question_responses uqr
-                 WHERE uqr.question_id = q.id AND uqr.user_id = $1
-               ),
-               'UNATTEMPTED'
+             (
+               SELECT CASE 
+                 WHEN COUNT(uqr.id) = 0 THEN 'UNATTEMPTED'
+                 WHEN bool_or(uqr.is_correct) THEN 'COMPLETED'
+                 ELSE 'ATTEMPTED'
+               END
+               FROM user_question_responses uqr
+               WHERE uqr.question_id = q.id AND uqr.user_id = $1
              ) as status,
              (
                SELECT string_agg(qcl.node_id, ', ')
