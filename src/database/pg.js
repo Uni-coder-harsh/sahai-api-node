@@ -10,7 +10,7 @@ const pgPool = new Pool({
   ssl: config.PG.ssl,
   max: 25, // Optimized pool size
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  connectionTimeoutMillis: 20000
 });
 
 pgPool.on('connect', () => {
