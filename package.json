@@ -12,9 +12,11 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.5.2",
     "ioredis": "^5.4.1",
     "mongodb": "^6.5.0",
     "pg": "^8.11.5",
+    "rate-limit-redis": "^5.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

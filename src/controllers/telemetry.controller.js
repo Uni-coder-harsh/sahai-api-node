@@ -41,12 +41,12 @@ async function ingestTelemetry(req, res) {
       });
     }
 
-    const { interaction_type, metrics, user_id } = parseResult.data;
+    const { interaction_type, metrics } = parseResult.data;
     
-    // Resolve user ID (authenticated user ID from auth middleware or fallback to body user_id)
-    const finalUserId = req.userId || user_id;
+    // Extract user_id exclusively from the verified JWT Bearer token (populated in authRequired middleware)
+    const finalUserId = req.userId;
     if (!finalUserId) {
-      return res.status(400).json({ error: 'user_id is required.' });
+      return res.status(401).json({ error: 'Unauthorized. Authenticated user ID is required.' });
     }
 
     // 2. Build the flexible schemaless telemetry event with mandated top-level keys
