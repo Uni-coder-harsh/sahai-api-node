@@ -61,10 +61,53 @@ async function ingestTelemetry(req, res) {
       success: req.body.success !== undefined ? req.body.success : true,
       attempts: req.body.attempts || 1,
       code_snippet: req.body.code_snippet || null,
-      behavioral_flags: req.body.behavioral_flags || []
+      behavioral_flags: req.body.behavioral_flags || [],
+      // Handwriting OCR / Grader keys
+      image_base64: req.body.image_base64 || null,
+      question_id: req.body.question_id || null,
+      time_spent_sec: req.body.time_spent_sec || req.body.time_spent_seconds || null,
+      run_count: req.body.run_count || null,
+      backspace_count: req.body.backspace_count || null,
+      paste_char_count: req.body.paste_char_count || null,
+      syntax_error_count: req.body.syntax_error_count || null,
+      label: req.body.label || null
     };
 
-    // 3. Push to Upstash Redis List / Stream
+    // 3. For OCR_HANDWRITING events, process synchronously by calling the Python math engine `/process-telemetry` endpoint
+    if (interaction_type === 'OCR_HANDWRITING') {
+      const pythonEngineUrl = config.ENGINE_PYTHON_URL || 'http://localhost:5000';
+      try {
+        console.log(`[TelemetryController] Synchronously processing OCR_HANDWRITING event: ${rawEvent.event_id}`);
+        const pythonResponse = await fetch(`${pythonEngineUrl}/process-telemetry`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(rawEvent)
+        });
+        
+        if (!pythonResponse.ok) {
+          const errText = await pythonResponse.text();
+          throw new Error(`Python engine returned status ${pythonResponse.status}: ${errText}`);
+        }
+        
+        const pythonResult = await pythonResponse.json();
+        
+        return res.status(200).json({
+          message: 'Handwriting telemetry processed synchronously.',
+          event_id: rawEvent.event_id,
+          ...pythonResult
+        });
+      } catch (err) {
+        console.error('[TelemetryController] Synchronous Python handler execution failed:', err);
+        return res.status(500).json({
+          error: 'Failed to process handwriting telemetry synchronously.',
+          details: err.message
+        });
+      }
+    }
+
+    // 4. Push to Upstash Redis List / Stream for other telemetry events
     if (redisClient) {
       await redisClient.rpush(config.TELEMETRY_QUEUE, JSON.stringify(rawEvent));
       console.log(`[TelemetryController] Buffered event ${rawEvent.event_id} to queue: ${config.TELEMETRY_QUEUE}`);
@@ -79,7 +122,7 @@ async function ingestTelemetry(req, res) {
       return res.status(500).json({ error: 'Redis queue connection not available.' });
     }
 
-    // 4. Return HTTP 202 Accepted immediately with zero database writes
+    // 5. Return HTTP 202 Accepted immediately for non-blocking events
     return res.status(202).json({
       message: 'Telemetry event accepted for processing.',
       event_id: rawEvent.event_id
