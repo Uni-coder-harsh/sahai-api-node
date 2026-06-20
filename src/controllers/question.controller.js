@@ -335,9 +335,6 @@ async function getPracticeQuestions(req, res) {
   }
 }
 
-/**
- * Fetches user question response history.
- */
 async function getAttemptHistory(req, res) {
   const { user_id } = req.query;
 
@@ -346,7 +343,7 @@ async function getAttemptHistory(req, res) {
   }
 
   try {
-    const historyQuery = `
+    const mcqQuery = `
       SELECT uqr.id, uqr.is_correct, uqr.time_spent_seconds, uqr.created_at,
              q.question_text, q.difficulty_level,
              opt.option_letter as chosen_option_letter, opt.option_text as chosen_option_text,
@@ -363,8 +360,39 @@ async function getAttemptHistory(req, res) {
       WHERE uqr.user_id = $1
       ORDER BY uqr.created_at DESC;
     `;
-    const historyRes = await pgPool.query(historyQuery, [user_id]);
-    res.json(historyRes.rows);
+
+    const handwritingQuery = `
+      SELECT uhr.id, uhr.is_correct, uhr.time_spent_seconds, uhr.created_at,
+             q.question_text, q.difficulty_level,
+             uhr.ocr_extracted_text, uhr.llm_logical_flaw, uhr.failed_node_id,
+             cn.concept_name as failed_node_name
+      FROM user_handwriting_responses uhr
+      LEFT JOIN questions q ON uhr.question_id = q.id
+      LEFT JOIN concept_nodes cn ON uhr.failed_node_id = cn.node_id
+      WHERE uhr.user_id = $1
+      ORDER BY uhr.created_at DESC;
+    `;
+
+    const [mcqRes, handwritingRes] = await Promise.all([
+      pgPool.query(mcqQuery, [user_id]),
+      pgPool.query(handwritingQuery, [user_id])
+    ]);
+
+    const mcqAttempts = mcqRes.rows.map(row => ({
+      ...row,
+      type: 'mcq'
+    }));
+
+    const handwritingAttempts = handwritingRes.rows.map(row => ({
+      ...row,
+      type: 'handwriting'
+    }));
+
+    const combinedHistory = [...mcqAttempts, ...handwritingAttempts].sort((a, b) => {
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    res.json(combinedHistory);
   } catch (error) {
     console.error('[QuestionController] Failed to fetch attempt history:', error);
     res.status(500).json({ error: 'Failed to fetch attempt history.', details: error.message });
