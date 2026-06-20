@@ -136,6 +136,10 @@ async function onboardUser(req, res) {
 async function getCognitiveState(req, res) {
   const { user_id } = req.params;
 
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
   try {
     const stateQuery = `
       SELECT ucs.node_id, cn.concept_name, cn.difficulty_baseline, 
