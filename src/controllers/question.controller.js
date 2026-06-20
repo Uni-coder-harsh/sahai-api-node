@@ -71,6 +71,8 @@ async function submitAnswer(req, res) {
     return res.status(400).json({ error: 'user_id, question_id, and option_id are required.' });
   }
 
+  const currentLanguage = req.headers['x-app-language'] || 'en';
+
   try {
     // 1. Fetch question and check correctness
     const questionQuery = `
@@ -129,6 +131,7 @@ async function submitAnswer(req, res) {
         backspace_count: parseInt(backspace_count || 0),
         paste_char_count: parseInt(paste_char_count || 0),
         syntax_error_count: parseInt(syntax_error_count || 0),
+        language: currentLanguage,
         // Send along primary connection weight
         influence_weight: parseFloat(link.weight),
         // Send along misconceptions for potential updates
@@ -186,6 +189,7 @@ async function submitAnswer(req, res) {
         backspace_count: parseInt(backspace_count || 0),
         paste_char_count: parseInt(paste_char_count || 0),
         syntax_error_count: parseInt(syntax_error_count || 0),
+        language: currentLanguage,
         timestamp: new Date(),
         // MCQ features
         question_word_count: parseInt(question_word_count || 40),
@@ -217,13 +221,22 @@ async function submitAnswer(req, res) {
       });
     }
 
+    let tutorFeedback = null;
+    for (const update of telemetryEventsRes) {
+      if (update.tutor_feedback) {
+        tutorFeedback = update.tutor_feedback;
+        break;
+      }
+    }
+
     res.json({
       success: isCorrect,
       correct_option_id: question.correct_option_id,
       message: isCorrect ? 'Correct answer!' : 'Incorrect answer.',
       concepts_evaluated: conceptLinks.map(c => c.node_id),
       misconceptions_detected: misconceptions.map(m => m.node_id),
-      telemetry_updates: telemetryEventsRes
+      telemetry_updates: telemetryEventsRes,
+      tutor_feedback: tutorFeedback
     });
   } catch (error) {
     console.error('[QuestionController] Failed to submit answer:', error);

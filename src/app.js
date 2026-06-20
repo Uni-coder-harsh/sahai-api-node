@@ -7,6 +7,7 @@ const userRoutes = require('./routes/user.routes');
 const telemetryRoutes = require('./routes/telemetry.routes');
 const curriculumRoutes = require('./routes/curriculum.routes');
 const questionRoutes = require('./routes/question.routes');
+const dashboardRoutes = require('./routes/dashboard.routes');
 
 const path = require('path');
 const app = express();
@@ -40,6 +41,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/telemetry', telemetryRoutes);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/questions', questionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 // Health Status Endpoint checking SQL and Document database layers
 app.get('/api/health', async (req, res) => {
