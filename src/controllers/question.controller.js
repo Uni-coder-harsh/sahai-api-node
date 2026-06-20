@@ -58,7 +58,13 @@ async function submitAnswer(req, res) {
     run_count,
     backspace_count,
     paste_char_count,
-    syntax_error_count
+    syntax_error_count,
+    question_word_count,
+    time_to_first_action_sec,
+    reading_velocity,
+    option_switch_count,
+    minimum_click_interval_ms,
+    network_drop_duration_sec
   } = req.body;
 
   if (!user_id || !question_id || !option_id) {
@@ -130,7 +136,24 @@ async function submitAnswer(req, res) {
           node_id: m.node_id,
           weight: parseFloat(m.weight)
         })),
-        timestamp: new Date()
+        timestamp: new Date(),
+        // MCQ features
+        question_word_count: parseInt(question_word_count || 40),
+        time_to_first_action_sec: parseFloat(time_to_first_action_sec || 10.0),
+        reading_velocity: parseFloat(reading_velocity || 3.0),
+        option_switch_count: parseInt(option_switch_count || 0),
+        minimum_click_interval_ms: parseFloat(minimum_click_interval_ms || 1000.0),
+        network_drop_duration_sec: parseFloat(network_drop_duration_sec || 0.0),
+        total_time_spent_sec: parseFloat(time_spent_seconds || 30.0),
+        metrics: {
+          question_word_count: parseInt(question_word_count || 40),
+          time_to_first_action_sec: parseFloat(time_to_first_action_sec || 10.0),
+          reading_velocity: parseFloat(reading_velocity || 3.0),
+          option_switch_count: parseInt(option_switch_count || 0),
+          minimum_click_interval_ms: parseFloat(minimum_click_interval_ms || 1000.0),
+          network_drop_duration_sec: parseFloat(network_drop_duration_sec || 0.0),
+          total_time_spent_sec: parseFloat(time_spent_seconds || 30.0)
+        }
       };
 
       // Ingest in Mongo raw logs first
@@ -163,7 +186,24 @@ async function submitAnswer(req, res) {
         backspace_count: parseInt(backspace_count || 0),
         paste_char_count: parseInt(paste_char_count || 0),
         syntax_error_count: parseInt(syntax_error_count || 0),
-        timestamp: new Date()
+        timestamp: new Date(),
+        // MCQ features
+        question_word_count: parseInt(question_word_count || 40),
+        time_to_first_action_sec: parseFloat(time_to_first_action_sec || 10.0),
+        reading_velocity: parseFloat(reading_velocity || 3.0),
+        option_switch_count: parseInt(option_switch_count || 0),
+        minimum_click_interval_ms: parseFloat(minimum_click_interval_ms || 1000.0),
+        network_drop_duration_sec: parseFloat(network_drop_duration_sec || 0.0),
+        total_time_spent_sec: parseFloat(time_spent_seconds || 30.0),
+        metrics: {
+          question_word_count: parseInt(question_word_count || 40),
+          time_to_first_action_sec: parseFloat(time_to_first_action_sec || 10.0),
+          reading_velocity: parseFloat(reading_velocity || 3.0),
+          option_switch_count: parseInt(option_switch_count || 0),
+          minimum_click_interval_ms: parseFloat(minimum_click_interval_ms || 1000.0),
+          network_drop_duration_sec: parseFloat(network_drop_duration_sec || 0.0),
+          total_time_spent_sec: parseFloat(time_spent_seconds || 30.0)
+        }
       };
       const mongoDb = getMongoDb();
       await mongoDb.collection('telemetry_raw').insertOne(payload);
