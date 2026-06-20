@@ -1,8 +1,23 @@
 const crypto = require('crypto');
 
-// Load AES key from environment. Must be exactly 32 bytes (256 bits).
-// Standard fallback provided for local development convenience.
-const SECRET_KEY = process.env.AES_SECRET_KEY || 'sahai-super-secret-key-123456789';
+// Load AES keys
+const DEFAULT_SECRET_KEY = 'sahai-super-secret-key-123456789';
+const CONFIGURED_SECRET_KEY = process.env.AES_SECRET_KEY;
+
+function attemptDecryption(encryptedData, iv, secretKey) {
+  if (!secretKey) return null;
+  const keyBuffer = Buffer.from(secretKey, 'utf8');
+  if (keyBuffer.length !== 32) {
+    console.warn(`[DecryptMiddleware] Key is not 32 bytes (length is ${keyBuffer.length}). Skipping key.`);
+    return null;
+  }
+  
+  const ivBuffer = Buffer.from(iv, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, ivBuffer);
+  let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return JSON.parse(decrypted);
+}
 
 function decryptTelemetry(req, res, next) {
   const { iv, encryptedData } = req.body;
@@ -15,33 +30,38 @@ function decryptTelemetry(req, res, next) {
     });
   }
   
-  try {
-    const ivBuffer = Buffer.from(iv, 'hex');
-    const keyBuffer = Buffer.from(SECRET_KEY, 'utf8');
-    
-    if (keyBuffer.length !== 32) {
-      throw new Error(`AES_SECRET_KEY must be exactly 32 bytes. Current length is ${keyBuffer.length}.`);
+  // Try 1: Decrypt with configured key
+  if (CONFIGURED_SECRET_KEY) {
+    try {
+      const decrypted = attemptDecryption(encryptedData, iv, CONFIGURED_SECRET_KEY);
+      if (decrypted) {
+        req.body = decrypted;
+        return next();
+      }
+    } catch (err) {
+      console.warn(`[DecryptMiddleware] Configured key decryption failed: ${err.message}. Attempting default fallback key...`);
     }
-    
-    // Decrypt the AES-256-CBC encrypted payload
-    const decipher = crypto.createDecipheriv('aes-256-cbc', keyBuffer, ivBuffer);
-    
-    let decrypted = decipher.update(encryptedData, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-    
-    // Replace req.body with the decrypted JSON object
-    req.body = JSON.parse(decrypted);
-    
-    next();
-  } catch (err) {
-    console.error('[DecryptMiddleware] Decryption failed:', err.message);
-    return res.status(403).json({
-      error: 'Forbidden',
-      message: 'Decryption failed! Key mismatch or corrupted data.'
-    });
   }
+  
+  // Try 2: Decrypt with default key
+  try {
+    const decrypted = attemptDecryption(encryptedData, iv, DEFAULT_SECRET_KEY);
+    if (decrypted) {
+      req.body = decrypted;
+      return next();
+    }
+  } catch (err) {
+    console.error(`[DecryptMiddleware] Default fallback decryption failed: ${err.message}`);
+  }
+  
+  // If both failed
+  return res.status(403).json({
+    error: 'Forbidden',
+    message: 'Decryption failed! Key mismatch or corrupted data.'
+  });
 }
 
 module.exports = {
   decryptTelemetry
 };
+
