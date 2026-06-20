@@ -49,6 +49,8 @@ async function ingestTelemetry(req, res) {
       return res.status(401).json({ error: 'Unauthorized. Authenticated user ID is required.' });
     }
 
+    const currentLanguage = req.headers['x-app-language'] || 'en';
+
     // 2. Build the flexible schemaless telemetry event with mandated top-level keys
     const rawEvent = {
       event_id: crypto.randomUUID ? crypto.randomUUID() : crypto.randomBytes(16).toString('hex'),
@@ -56,6 +58,7 @@ async function ingestTelemetry(req, res) {
       interaction_type,
       timestamp: new Date().toISOString(),
       metrics,
+      language: currentLanguage,
       // Add optional standard keys if they exist in req.body
       node_id: req.body.node_id || null,
       success: req.body.success !== undefined ? req.body.success : true,
@@ -77,11 +80,12 @@ async function ingestTelemetry(req, res) {
     if (interaction_type === 'OCR_HANDWRITING') {
       const pythonEngineUrl = config.ENGINE_PYTHON_URL || 'http://localhost:5000';
       try {
-        console.log(`[TelemetryController] Synchronously processing OCR_HANDWRITING event: ${rawEvent.event_id}`);
+        console.log(`[TelemetryController] Synchronously processing OCR_HANDWRITING event: ${rawEvent.event_id} (Language: ${currentLanguage})`);
         const pythonResponse = await fetch(`${pythonEngineUrl}/process-telemetry`, {
           method: 'POST',
           headers: {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'X-App-Language': currentLanguage
           },
           body: JSON.stringify(rawEvent)
         });
